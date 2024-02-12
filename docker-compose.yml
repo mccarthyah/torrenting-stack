@@ -1,0 +1,89 @@
+version: "3"
+services:
+  deluge4vpn:
+    container_name: deluge4vpn-stack
+    network_mode: container:piawireguard
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=${TZENV}
+      - UMASK=002
+      - DELUGE_LOGLEVEL=error
+    image: lscr.io/linuxserver/deluge:latest
+    ipc: private
+    restart: unless-stopped
+    volumes:
+      - /srv/datastore/docker/piawireguard/pia-shared/port.dat:/pia/forwarded_port
+      - /srv/datastore/docker/deluge4vpn:/config
+      - /srv/mainpool/media:/download
+     
+  storm:
+    container_name: storm-stack
+    network_mode: container:piawireguard
+    restart: unless-stopped
+    environment:
+      - DELUGE_RPC_PORT=58846
+      - DELUGE_RPC_VERSION=v2
+      - DELUGE_RPC_USERNAME=andrew
+      - DELUGE_RPC_PASSWORD=luigina
+      - DELUGE_RPC_HOSTNAME=10.10.20.80
+    image: ghcr.io/relvacode/storm:latest
+  
+  socks5:
+    image: serjs/go-socks5-proxy
+    container_name: socks5
+    network_mode: container:piawireguard
+    environment:
+      - TZ=America/Toronto
+ #     - PROXY_USER=andrew
+ #     - PROXY_PASS=luigina
+      - PROXY_PORT=1080
+    #ports:
+    #  - "1080:1080"
+    restart: unless-stopped
+  
+  firefox:
+    container_name: firefox-stack
+    environment:
+      - PUID=${PUIDENV}
+      - PGID=${PGIDENV}
+      - TZ=${TZENV}
+    image: linuxserver/firefox:latest
+    restart: unless-stopped
+    volumes:
+      - ${FIREFOXCONFIG}:/config
+    network_mode: container:piawireguard
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+
+    network_mode: container:piawireguard
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=America/Toronto
+      - WEBUI_PORT=8080
+    volumes:
+      - /srv/datastore/docker/qbittorrent:/config
+      - /srv/mainpool/media:/download
+      - /srv/datastore/docker/gluetun-pia/forward:/forward
+    restart: unless-stopped
+    
+  qbittorrent-port-forward-file:
+    container_name: qbittorrent-port-forward
+    environment:
+      - QBT_USERNAME=admin
+      - QBT_PASSWORD=
+      - QBT_ADDR=http://10.10.20.80:8080
+      - PORT_FILE=/port-forward/port.dat
+    image: docker.io/charlocharlie/qbittorrent-port-forward-file:latest
+    volumes:
+      - /srv/datastore/docker/piawireguard/pia-shared:/port-forward
+      - /srv/datastore/docker/qbt-port-forward:/config
+
+  
+networks:
+  MyMacvlan:
+    external: true
+    name: MyMacvlan
